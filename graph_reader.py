@@ -1,7 +1,7 @@
 import networkx as nx
 
 
-def read_graph(graph_file='ca-GrQc.txt', n_skip_lines=0):
+def read_graph(graph_file='toyGraph.txt', n_skip_lines=0):
     # Open the file
     with open(graph_file, 'r') as file:
         # Skip the first N lines (e.g., skip first # lines)
