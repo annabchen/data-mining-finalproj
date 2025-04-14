@@ -4,100 +4,94 @@ import networkx as nx
 import networkit as nk
 from typing import Union
 from collections import deque
-from littleballoffur.sampler import Sampler
+from graph_reader import read_graph
+from GraphSampler import GraphSampler
 
 
-NKGraph = type(nk.graph.Graph())
-NXGraph = nx.classes.graph.Graph
+class FFSampler(GraphSampler):
+    def __init__(self, graph, probOut, probIn, final_number_of_nodes=100, final_number_of_edges=100,
+                 final_number_of_wedges=100, isDirected=True):
+        super().__init__(graph, final_number_of_nodes, final_number_of_edges, final_number_of_wedges, isDirected)
+        self.probIn = probIn
+        self.probOut = probOut
 
+    def random_sample(self):
+        if not self.isDirected:
+            new_graph = nx.Graph()
+        else:
+            new_graph = nx.DiGraph()
 
-class ForestFireSampler(Sampler):
-    r"""An implementation of forest fire sampling. The procedure is a stochastic
-    snowball sampling method where the expansion is proportional to the burning probability.
-    `"For details about the algorithm see this paper." <https://cs.stanford.edu/people/jure/pubs/sampling-kdd06.pdf>`_
+        # Start from a random seed node
+        nodes = list(self.graph.nodes)
 
+        seed_node = random.choice(nodes)
+        visited = set()  # Stores the visited nodes
+        queue = deque([seed_node]) # Stores the next nodes to be visited
 
-    Args:
-        number_of_nodes (int): Number of sampled nodes. Default is 100.
-        p (float): Burning probability. Default is 0.4.
-        seed (int): Random seed. Default is 42.
-    """
+        while (new_graph.number_of_nodes() < self.final_number_of_nodes and
+               new_graph.number_of_edges() < self.final_number_of_edges):
+            current_node = seed_node
+            if len(queue) != 0:
+                # If there are no more nodes to visit,
+                # but the while condition is still true,
+                # then select a new seed node
+                current_node = queue.popleft()
+            else:
+                seed_node = random.choice(nodes)
+                if seed_node in visited:
+                    continue
+                queue = deque([seed_node])
+            if current_node in visited:
+                continue
 
-    def __init__(
-        self,
-        number_of_nodes: int = 100,
-        p: float = 0.4,
-        seed: int = 42,
-        max_visited_nodes_backlog: int = 100,
-        restart_hop_size: int = 10,
-    ):
-        self.number_of_nodes = number_of_nodes
-        self.p = p
-        self.seed = seed
-        self._set_seed()
-        self.restart_hop_size = restart_hop_size
-        self.max_visited_nodes_backlog = max_visited_nodes_backlog
+            visited.add(current_node)
+            neighbors = list(self.graph.neighbors(current_node))
+            random.shuffle(neighbors)  # Shuffle neighbors to avoid bias
 
-    def _create_node_sets(self, graph):
-        """
-        Create a starting set of nodes.
-        """
-        self._sampled_nodes = set()
-        self._set_of_nodes = set(range(self.backend.get_number_of_nodes(graph)))
-        self._visited_nodes = deque(maxlen=self.max_visited_nodes_backlog)
-
-    def _start_a_fire(self, graph):
-        """
-        Starting a forest fire from a single node.
-        """
-        remaining_nodes = list(self._set_of_nodes.difference(self._sampled_nodes))
-        seed_node = random.choice(remaining_nodes)
-        self._sampled_nodes.add(seed_node)
-        node_queue = deque([seed_node])
-        while len(self._sampled_nodes) < self.number_of_nodes:
-            if len(node_queue) == 0:
-                node_queue = deque(
-                    [
-                        self._visited_nodes.popleft()
-                        for k in range(
-                            min(self.restart_hop_size, len(self._visited_nodes))
-                        )
-                    ]
-                )
-                if len(node_queue) == 0:
-                    print(
-                        "Warning: could not collect the required number of nodes. The fire could not find enough nodes to burn."
-                    )
+            # Add all neighbors of each node a queue
+            for neighbor in neighbors:
+                if new_graph.number_of_nodes() >= self.final_number_of_nodes or \
+                        new_graph.number_of_edges() >= self.final_number_of_edges:
                     break
-            top_node = node_queue.popleft()
-            self._sampled_nodes.add(top_node)
-            neighbors = set(self.backend.get_neighbors(graph, top_node))
-            unvisited_neighbors = neighbors.difference(self._sampled_nodes)
-            score = np.random.geometric(self.p)
-            count = min(len(unvisited_neighbors), score)
-            burned_neighbors = random.sample(unvisited_neighbors, count)
-            self._visited_nodes.extendleft(
-                unvisited_neighbors.difference(set(burned_neighbors))
-            )
-            for neighbor in burned_neighbors:
-                if len(self._sampled_nodes) >= self.number_of_nodes:
-                    break
-                node_queue.extend([neighbor])
+                if random.random() >= self.probOut or random.random() >= self.probIn:
+                    new_graph.add_edge(current_node, neighbor)
 
-    def sample(self, graph: Union[NXGraph, NKGraph]) -> Union[NXGraph, NKGraph]:
-        """
-        Sampling nodes iteratively with a forest fire sampler.
+                if neighbor not in visited:
+                    queue.append(neighbor)
 
-        Arg types:
-            * **graph** *(NetworkX or NetworKit graph)* - The graph to be sampled from.
-
-        Return types:
-            * **new_graph** *(NetworkX or NetworKit graph)* - The graph of sampled nodes.
-        """
-        self._deploy_backend(graph)
-        self._check_number_of_nodes(graph)
-        self._create_node_sets(graph)
-        while len(self._sampled_nodes) < self.number_of_nodes:
-            self._start_a_fire(graph)
-        new_graph = self.backend.get_subgraph(graph, self._sampled_nodes)
         return new_graph
+
+    @staticmethod
+    def get_method_name():
+        return "Forest Fire Sampling"
+
+    def burn(self, graph):
+        """
+                start w a single random node and burn outgoing edges.
+                when the edge is burned, the nodes connected have a chance of catching fire too:
+                - selects x nodes
+                - select in-links with probability r (backward burnign ratio) times less than out-links (forward burning prob p)
+                nodes cannot be visited a second time
+
+        """
+        # if seed is null, call starting_set
+        # while the
+
+    def starting_set(self, graph):
+        """
+            Create a starting set of nodes.
+        """
+
+
+if __name__ == '__main__':
+    orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
+
+    print("Original # Nodes:", orig_graph.number_of_nodes())
+    print("Original # Edges:", orig_graph.number_of_edges())
+
+    graph_sample = FFSampler(orig_graph, 0.5, 0.5, 5000, 5000)
+
+    sample = graph_sample.random_sample()
+
+    print("\nSampled # Nodes:", sample.number_of_nodes())
+    print("Sampled # Edges:", sample.number_of_edges())
