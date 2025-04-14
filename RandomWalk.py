@@ -20,34 +20,33 @@ class RandomWalk(GraphSampler):
         else:
             new_graph = nx.DiGraph()
 
-        nodes = list(self.graph.nodes())
         # random start node
+        nodes = list(self.graph.nodes())
         start = random.choice(nodes)
-        # nodes.remove(start)
-        # print(f"Starting node: {start}")
         curr = start
-        visited = {start}
+        visited = set({start})
+        sample_nodes = 1
+        maxsteps = 100 * self.graph.number_of_nodes() # arbitrary value
 
         # select nodes until reached desired size
-        while new_graph.number_of_nodes() < self.final_number_of_nodes:
+        while sample_nodes < self.final_number_of_nodes: 
+            # chance of flyback
             if random.random() > self.flyback:
                 curr = start
             else:
                 neighbors = list(self.graph.neighbors(curr))
-                if not neighbors:
-                    # print("Not enough neighbors")  # deal with this another way
+                if not neighbors or steps > maxsteps:
+                    # prevent getting stuck in traversal
+                    steps = 0
                     curr = random.choice(nodes)
-                    while curr in visited:
-                        curr = random.choice(nodes)
                     neighbors = list(self.graph.neighbors(curr))
                 nex = random.choice(neighbors)
                 new_graph.add_edge(curr, nex)
-                print(new_graph.number_of_nodes())
-
                 if nex not in visited:
                     visited.add(nex)
-                    nodes.remove(nex)
+                    sample_nodes += 1
                 curr = nex
+            steps += 1
 
         # return constucted graph
         return new_graph
