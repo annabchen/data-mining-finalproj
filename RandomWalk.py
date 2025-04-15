@@ -15,6 +15,10 @@ class RandomWalk(GraphSampler):
     def random_sample(self):
         """ Return sample of larger graph given flyback probability"""
 
+        if self.flyback >= 1 or self.final_number_of_nodes > self.graph.number_of_nodes():
+            print("Invalid input")
+            return
+
         if not self.isDirected:
             new_graph = nx.Graph()
         else:
@@ -26,7 +30,8 @@ class RandomWalk(GraphSampler):
         curr = start
         visited = set({start})
         sample_nodes = 1
-        maxsteps = 100 * self.graph.number_of_nodes() # arbitrary value
+        steps = 0
+        maxsteps = self.graph.number_of_nodes() # arbitrary value, may want to increase
 
         # select nodes until reached desired size
         while sample_nodes < self.final_number_of_nodes: 
