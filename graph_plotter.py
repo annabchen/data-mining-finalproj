@@ -4,14 +4,7 @@ import numpy as np
 
 def get_colormap_colors(n, cmap_name='plasma'):
     """
-    Generate a list of n colors using a specified matplotlib colormap.
-
-    Parameters:
-    - n (int): Number of colors to generate.
-    - cmap_name (str): Name of the matplotlib colormap to use (e.g., 'viridis', 'plasma', 'cool', etc.)
-
-    Returns:
-    - List of RGBA tuples.
+    Generate a list of n colors using a specified colormap.
     """
     cmap = plt.get_cmap(cmap_name)
     return [cmap(i / (n - 1)) for i in range(n)]
@@ -22,26 +15,22 @@ def plot_linear_with_scatter(x_values, input_values, errors_inputs, labels=None,
                              ylabel="Metric", scale='linear'):
     """
     Plots a line graph with scatter points for the given y-values.
-
-    Parameters:
-    - y_values (list or array-like): Y-values to plot.
-    - title (str): Title of the plot.
-    - xlabel (str): Label for the X-axis.
-    - ylabel (str): Label for the Y-axis.
     """
 
-    colors = get_colormap_colors(20, 'plasma')
+    colors = get_colormap_colors(30, 'plasma')
 
+    # Separating inputs into labels and y_values
     labels = list(input_values.keys())
     y_values = list(input_values.values())
     errors = list()
+
+    # Appending the errors
     for label in labels:
         errors.append(errors_inputs[label])
-    print(errors)
-    print(labels)
-    print(y_values)
-    shift = 2
 
+    # Plotting
+    shift = 2
+    linestyles = ["solid", "solid", "solid", "dashed", "dashed", "dashed"]
     plt.figure(figsize=(8, 6))
     for index, (y_value_method, errors_method) in enumerate(zip(y_values, errors)):
         plt.scatter(np.array(x_values)+shift * (index - len(labels) // 2),  y_value_method, label=labels[index],
@@ -49,7 +38,7 @@ def plot_linear_with_scatter(x_values, input_values, errors_inputs, labels=None,
                     linewidth=3, zorder=3)
         plt.errorbar(np.array(x_values) + shift * (index - len(labels) // 2), y_value_method, color=colors[4*index + 3],
                      yerr=errors_method, ecolor=colors[4*index + 3],
-                     linestyle='--', linewidth=3, alpha=1, capsize=5, zorder=1)
+                     linestyle=linestyles[index], linewidth=3, alpha=1, capsize=5, zorder=1)
         plt.xlabel(xlabel, fontsize=18)
         plt.ylabel(ylabel, fontsize=18)
         plt.legend(fontsize=14)
@@ -60,7 +49,7 @@ def plot_linear_with_scatter(x_values, input_values, errors_inputs, labels=None,
     plt.show()
 
 
-#  For Distributions
+#  For Distribution Plotting
 def bar_plot(x_values, n_bins=30, labels=None,
              image_name="Figure.png", xlabel="Degree", ylabel="Normalized Distribution"):
     # PLOTS THE DISTRIBUTION OF VALUES IN A GRAPH. E.G. DEGREE DISTRIBUTION
@@ -82,6 +71,9 @@ def bar_plot(x_values, n_bins=30, labels=None,
 if __name__ == '__main__':
     # Testing
     plot_linear_with_scatter([10, 20, 30, 40, 50, 60],
-                             [[1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5]],
-                             [[0.5] * 6]*2)
+                             {1:[0, 1, 2, 3, 4, 5],
+                               2: [0, 1, 2, 3, 4, 5],
+                               3:[0, 1, 2, 3, 4, 5],
+                                4:[0, 1, 2, 3, 4, 5]},
+                             [[0.5] * 6]*5)
     # bar_plot([[1,2,2,3,4,4,5], [1,2,3]])

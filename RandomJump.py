@@ -38,6 +38,7 @@ class RandomJump(GraphSampler):
                     # print("Not enough neighbors")  # deal with this another way
                     curr = random.choice(nodes)
                     while curr in visited:
+
                         curr = random.choice(nodes)
                     neighbors = list(self.graph.neighbors(curr))
 
@@ -47,7 +48,6 @@ class RandomJump(GraphSampler):
                 if len(neighbors) > 0:
                     nex = random.choice(neighbors)
                     new_graph.add_edge(curr, nex)
-
                 #  print(new_graph.number_of_nodes())
 
                 if nex not in visited:
@@ -63,7 +63,7 @@ class RandomJump(GraphSampler):
 
 
 if __name__ == '__main__':
-    orig_graph = read_graph("as-caida20071105.txt", n_skip_lines=8, directed_graph=True)
+    orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
 
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges ", orig_graph.number_of_edges())

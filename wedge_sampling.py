@@ -47,8 +47,7 @@ class WedgeSampler(GraphSampler):
     def count_total_wedges(self):
         """
         Count total number of wedges in the graph.
-        A wedge exists at every node with degree >= 2:
-        C(d, 2) = d * (d - 1) / 2 wedges centered at that node.
+        C(d, 2) = d * (d - 1) / 2 wedges centered at a node.
         """
         total = 0
         for node in self.graph.nodes():

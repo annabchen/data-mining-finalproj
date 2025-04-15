@@ -8,6 +8,9 @@ from scipy.stats import ks_2samp
 from random_node_sampler import RandomNodeSampler
 from snowball_sampling import SnowballSampler
 from wedge_sampling import WedgeSampler
+from RandomWalk import RandomWalk
+from RandomJump import RandomJump
+from forestfiresampler import FFSampler
 import time
 
 
@@ -169,7 +172,8 @@ def assortativity_analysis(orig_graph, sample_graph):
 
 
 def degree_distribution_analysis(graph):
-    """ANALYZING DEGREE DISTRIBUTION OF A GRAPH"""
+    """ANALYZING DEGREE DISTRIBUTION OF A GRAPH.
+    RETURNS A BAR CHART"""
     degrees = [d for n, d in graph.degree()]
     unique_degrees, counts = np.unique(degrees, return_counts=True)
     normalized_counts = counts / counts.sum()  # normalized histogram
@@ -177,6 +181,7 @@ def degree_distribution_analysis(graph):
 
 
 def test():
+    """TESTS DIFFERENT ANALYSIS METHODS"""
     orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
 
     print("Original # Nodes:", orig_graph.number_of_nodes())
@@ -256,12 +261,11 @@ def analyze_distribution(orig_graph, sampling_methods, metric_function, precompu
 
 
 def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_repetitions=10):
-    """Computes all the graphs with all the sample sizes,
-    as it is computationally expensive, especially for SnowBall Sampling"""
+    """Precomputes the defined graphs with the specified sample sizes which will later be used for characterization"""
     # Approx. number of wedges:
     # CA-GrQc: 52612; as-caida: 34617
 
-    wedge_sampler = WedgeSampler(orig_graph,1, 1)
+    wedge_sampler = WedgeSampler(orig_graph, 1, 1)
     n_wedges = wedge_sampler.count_total_wedges()  # Calculating the total number of wedges
 
     graphs = []
@@ -272,20 +276,20 @@ def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_r
             prelim_output = []
             for n_repetition in range(n_repetitions):
                 sample_graph = sampling_method(orig_graph,
-                                               int(sample_size / 100 * orig_graph.number_of_nodes()),
-                                               int(sample_size / 100 * orig_graph.number_of_edges()),
-                                               int(sample_size / 100 * n_wedges),
+                                               final_number_of_nodes=int(sample_size / 100 * orig_graph.number_of_nodes()),
+                                               final_number_of_edges=int(sample_size / 100 * orig_graph.number_of_edges()),
+                                               final_number_of_wedges=int(sample_size / 100 * n_wedges),
                                                isDirected=orig_graph.is_directed())
                 prelim_output.append(sample_graph.random_sample())
             interm_output.append(prelim_output)
         graphs.append(interm_output)
-    print(graphs)
     return graphs
 
 
 def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_graphs,  y_label="Metric",
                  n_sample_sizes=10, n_repetitions=10, image_name="Figure.png", scale='linear'):
-    """ANALYZES THE DEFINED METRIC FUNCTION USING A SPECIFIED SAMPLING METHOD"""
+    """ANALYZES THE DEFINED METRIC FUNCTION USING A SPECIFIED SAMPLING METHOD. RETURNS A MEAN OUTPUT.
+    E.G. MEAN DEGREE"""
     start_time = time.time()
     sample_sizes = np.linspace(10, 100, n_sample_sizes)  # samples sizes are evenly distributed
     y_values_mean = dict()  # orig_graph, sample_size_1, sample_size_2, ..., sample_size_n
@@ -304,15 +308,17 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
     y_values_error["Original Graph"] = []
     method_names.add("Original Graph")
 
+    # Iterate through all the sampling sizes, sampling methods, and the number of iterations
     for i, sample_size in enumerate(sample_sizes):
         for j, sampling_method in enumerate(sampling_methods):
             interm_outputs = list()
 
+            # generate the specified metric outputs for a precomputed graph
             for k in range(n_repetitions):
                 interm_outputs.append(metric_function(orig_graph, precomputed_graphs[i][j][k])[1])
 
             mean = float(np.mean(interm_outputs))  # mean of a specific method for specific sample size
-            std_error = float(np.std(interm_outputs))  # 68.9 % confidence (needs to be adjusted according the t-value)
+            std_error = float(2.262 * np.std(interm_outputs))  # ~95 % confidence for 9 degrees of freedom
             y_values_mean[sampling_method.get_method_name()].append(mean)
             y_values_error[sampling_method.get_method_name()].append(std_error)
 
@@ -334,10 +340,12 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
 
 if __name__ == '__main__':
     # test()
+    # Two graphs used for analysis
     graph_info_ca = ["CA-GrQc.txt", 4, False, "CA"]
     graph_info_as = ["as-caida20071105.txt", 8, True, "AS"]
-    N = 2
-    sampling_methods = [RandomEdgeSampler, RandomNodeSampler, SnowballSampler, WedgeSampler]
+    N = 2  # Number of graphs
+    # SAMPLING METHODS USED
+    sampling_methods = [RandomEdgeSampler, RandomNodeSampler, RandomJump, SnowballSampler, WedgeSampler, FFSampler]
     graph_infos = [graph_info_ca, graph_info_as]
     for i in range(N):
         orig_graph = read_graph(graph_infos[i][0], n_skip_lines=graph_infos[i][1], directed_graph=graph_infos[i][2])
@@ -361,10 +369,10 @@ if __name__ == '__main__':
                      y_label="Clustering Coefficient (Mean)",
                      n_sample_sizes=10, n_repetitions=10, image_name="clustering_coeff" + graph_infos[i][3] + ".png",
                      scale='linear')
-        # # Analyzing KS-Coefficient
-        analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="KS-Test Coefficient",
-                     n_sample_sizes=10, n_repetitions=10, image_name="ks_test_coeff" + graph_infos[i][3] + ".png",
-                     scale='linear')
+        # # # Analyzing KS-Coefficient
+        # analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="KS-Test Coefficient",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="ks_test_coeff" + graph_infos[i][3] + ".png",
+        #              scale='linear')
         # # Analyzing Graph Density
         analyze_mean(orig_graph, sampling_methods, density_analysis, precomputed_graphs, y_label="Density",
                      n_sample_sizes=10, n_repetitions=10, image_name="density" + graph_infos[i][3] + ".png",

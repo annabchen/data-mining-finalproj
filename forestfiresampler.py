@@ -9,7 +9,7 @@ from GraphSampler import GraphSampler
 
 
 class FFSampler(GraphSampler):
-    def __init__(self, graph, probOut, probIn, final_number_of_nodes=100, final_number_of_edges=100,
+    def __init__(self, graph, probOut=0.2, probIn=0.2, final_number_of_nodes=100, final_number_of_edges=100,
                  final_number_of_wedges=100, isDirected=False):
         super().__init__(graph, final_number_of_nodes, final_number_of_edges, final_number_of_wedges, isDirected)
         self.probIn = probIn
@@ -129,13 +129,13 @@ class FFSampler(GraphSampler):
 
 
 if __name__ == '__main__':
-    # orig_graph = read_graph("as-caida20071105.txt", n_skip_lines=8, directed_graph=True)
-    orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
+    orig_graph = read_graph("as-caida20071105.txt", n_skip_lines=8, directed_graph=True)
+    # orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
 
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges:", orig_graph.number_of_edges())
 
-    graph_sample = FFSampler(orig_graph, 0, 0, 25000, 5000)
+    graph_sample = FFSampler(orig_graph,  final_number_of_nodes=2000, final_number_of_edges=2000)
 
     sample = graph_sample.random_sample()
 

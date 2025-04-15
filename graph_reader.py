@@ -32,6 +32,7 @@ def read_graph(graph_file='CA-GrQc.txt', n_skip_lines=0, directed_graph=False):
 
             return directed_graph
 
+
 if __name__ == '__main__':
     graph = read_graph()
     print("Nodes:", graph.nodes)
