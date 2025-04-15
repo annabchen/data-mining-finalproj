@@ -11,11 +11,14 @@ def reader(input):
             a, b = map(int, line.strip().split())
             G.add_edge(a, b)
         return G
+    
+def eval(H):
+    pass
 
 def main():
     input = sys.argv[1]
     G = reader(input)
-    walk = RandomWalk(G, 5, 0.15)
+    walk = RandomWalk(G, 200, 0.15)
     H = walk.sampler()
     print(list(H.nodes))
     print(list(H.edges))

@@ -18,25 +18,29 @@ class RandomWalk:
         # random start node
         start = random.choice(list(self.G.nodes()))
         print(f"Starting node: {start}")
+
         curr = start
         visited = set([start])
-        s = 1
+        snodes = 1
+        steps = 0
+        maxsteps = 100 * self.G.number_of_nodes() # can adjust this
 
         # select nodes until reached desired size
-        while s < self.ssize:
+        while snodes < self.ssize:
             if random.random() <= self.flyback:
                 curr = start
             else:
                 neighbors = list(self.G.neighbors(curr))
-                if not neighbors:
-                    print("Not enough neighbors") # deal with this another way
+                if not neighbors or steps > maxsteps:
+                    steps = 0
+                    curr = random.choice(list(self.G.nodes()))
                 nex = random.choice(neighbors)
                 H.add_edge(curr, nex)
                 if(nex not in visited):
                     visited.add(nex)
-                    s += 1
+                    snodes += 1
                 curr = nex
+            steps += 1
 
         # return constucted graph
         return H
-
