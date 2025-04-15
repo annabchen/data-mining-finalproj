@@ -31,8 +31,8 @@ class RandomJump(GraphSampler):
         # select nodes until reached desired size
         while new_graph.number_of_nodes() < self.final_number_of_nodes:
             if random.random() > self.flyback:
-                curr = random.choice(nodes) #this one line differentiates from Random Walk - jump to new point
-            else:
+                curr = random.choice(nodes)  # this one line differentiates from Random Walk - jump to new point
+            elif curr is not None:
                 neighbors = list(self.graph.neighbors(curr))
                 if not neighbors:
                     # print("Not enough neighbors")  # deal with this another way
@@ -40,13 +40,18 @@ class RandomJump(GraphSampler):
                     while curr in visited:
                         curr = random.choice(nodes)
                     neighbors = list(self.graph.neighbors(curr))
-                nex = random.choice(neighbors)
-                new_graph.add_edge(curr, nex)
-                print(new_graph.number_of_nodes())
+
+                nex = None
+
+                # Fails for the directed graph
+                if len(neighbors) > 0:
+                    nex = random.choice(neighbors)
+                    new_graph.add_edge(curr, nex)
+
+                #  print(new_graph.number_of_nodes())
 
                 if nex not in visited:
                     visited.add(nex)
-                    nodes.remove(nex)
                 curr = nex
 
         # return constucted graph
@@ -58,12 +63,12 @@ class RandomJump(GraphSampler):
 
 
 if __name__ == '__main__':
-    orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
+    orig_graph = read_graph("as-caida20071105.txt", n_skip_lines=8, directed_graph=True)
 
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges ", orig_graph.number_of_edges())
 
-    graph_sample = RandomJump(orig_graph, 0.95, final_number_of_nodes=5200)
+    graph_sample = RandomJump(orig_graph, final_number_of_nodes=5000)
     sample = graph_sample.random_sample()
     print()
 
