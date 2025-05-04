@@ -19,8 +19,10 @@ class WedgeSampler(GraphSampler):
         sampled_wedges = 0
         wedge_nodes = set()
 
-        while sampled_wedges < self.final_number_of_wedges:
-            center = random.choice(list(self.graph.nodes()))
+        nodes = list(self.graph.nodes())
+
+        while sampled_wedges < self.final_number_of_wedges and len(wedge_nodes) < self.final_number_of_nodes:
+            center = random.choice(nodes)
             neighbors = list(self.graph.neighbors(center))
 
             if len(neighbors) < 2:
@@ -28,18 +30,20 @@ class WedgeSampler(GraphSampler):
 
             u, v = random.sample(neighbors, 2)
 
-            wedge_nodes.update([u, center, v])  # Add wedge nodes
-
-            if self.graph.has_edge(u, v) or self.graph.has_edge(v, u):  # Check if wedge is closed
-                closed += 1
-
+            # Count wedge
+            wedge_nodes.update([u, center, v])
             sampled_wedges += 1
 
-        fraction_closed = closed / self.final_number_of_wedges
-        estimated_triangles = fraction_closed * self.count_total_wedges() / 3
+            # Check if wedge is closed (i.e., u-v edge exists)
+            if self.graph.has_edge(u, v) or (not self.isDirected and self.graph.has_edge(v, u)):
+                closed += 1
 
+        # fraction_closed = closed / sampled_wedges if sampled_wedges else 0
+        # estimated_triangles = int(fraction_closed * self.count_total_wedges())
+
+        # print(f"Sampled {sampled_wedges} wedges.")
         # print(f"Fraction of closed wedges: {fraction_closed:.4f}")
-        # print(f"Estimated number of triangles: {int(estimated_triangles)}")
+        # print(f"Estimated number of triangles: {estimated_triangles}")
 
         induced_subgraph = self.graph.subgraph(wedge_nodes).copy()
         return induced_subgraph
@@ -70,9 +74,11 @@ if __name__ == '__main__':
     print("Original # Edges:", orig_graph.number_of_edges())
 
     print()
-    sampler = WedgeSampler(orig_graph, final_number_of_wedges=5000)
+
+    sampler = WedgeSampler(orig_graph, final_number_of_nodes=1000, final_number_of_wedges=100000)
     sampled_graph = sampler.random_sample()
     print()
+
     print("Sampled # Nodes:", sampled_graph.number_of_nodes())
     print("Sampled # Edges:", sampled_graph.number_of_edges())
 

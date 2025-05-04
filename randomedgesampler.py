@@ -16,20 +16,27 @@ class RandomEdgeSampler(GraphSampler):
         """
         # reading the graph
         orig_edges = list(self.graph.edges)
+        added_nodes = []
 
         if not self.isDirected:
             new_graph = nx.Graph()
         else:
             new_graph = nx.DiGraph()
-        # Choosing a random number of nodes and edges from the sample
-        for i in range(self.final_number_of_edges):
-            index = random.randint(0, len(orig_edges) - 1)  # The index of the edge
-            while new_graph.has_edge(orig_edges[index][0],
-                                     orig_edges[index][1]):  # Only add the edge if it hasn't been added
-                index = random.randint(0, len(orig_edges) - 1)
-            else:
-                new_graph.add_edge(orig_edges[index][0], orig_edges[index][1])
 
+        # Choosing a random number of nodes and edges from the sample
+        num_nodes = 0
+        while num_nodes < self.final_number_of_nodes:
+            index = random.randint(0, len(orig_edges) - 1)
+            u, v = orig_edges[index]
+
+            if not new_graph.has_edge(u, v):
+                new_graph.add_edge(u, v)
+                if u not in added_nodes:
+                    added_nodes.append(u)
+                    num_nodes += 1
+                if v not in added_nodes:
+                    added_nodes.append(v)
+                    num_nodes += 1
         return new_graph
 
     @staticmethod
@@ -43,7 +50,7 @@ if __name__ == '__main__':
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges ", orig_graph.number_of_edges())
 
-    graph_sample = RandomEdgeSampler(orig_graph, 300)
+    graph_sample = RandomEdgeSampler(orig_graph, final_number_of_nodes=25000)
     sample = graph_sample.random_sample()
     print()
 

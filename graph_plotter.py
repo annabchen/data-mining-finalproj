@@ -17,7 +17,6 @@ def plot_linear_with_scatter(x_values, input_values, errors_inputs, labels=None,
     Plots a line graph with scatter points for the given y-values.
     """
 
-    colors = get_colormap_colors(30, 'plasma')
 
     # Separating inputs into labels and y_values
     labels = list(input_values.keys())
@@ -30,15 +29,17 @@ def plot_linear_with_scatter(x_values, input_values, errors_inputs, labels=None,
 
     # Plotting
     shift = 2
-    linestyles = ["solid", "solid", "solid", "dashed", "dashed", "dashed"]
+    linestyles = ["solid", "solid", "dashed", "dashed", "dashed", "dashed", "dashed", "solid"]
+    colors = get_colormap_colors(len(y_values), 'viridis')
+
     plt.figure(figsize=(8, 6))
     for index, (y_value_method, errors_method) in enumerate(zip(y_values, errors)):
-        plt.scatter(np.array(x_values)+shift * (index - len(labels) // 2),  y_value_method, label=labels[index],
-                    color=colors[4*index + 3], marker='o',
+        plt.scatter(np.array(x_values),  y_value_method, label=labels[index], # +shift * (index - len(labels) // 2)
+                    color=colors[index], marker='^', alpha=0.7,
                     linewidth=3, zorder=3)
-        plt.errorbar(np.array(x_values) + shift * (index - len(labels) // 2), y_value_method, color=colors[4*index + 3],
-                     yerr=errors_method, ecolor=colors[4*index + 3],
-                     linestyle=linestyles[index], linewidth=3, alpha=1, capsize=5, zorder=1)
+        plt.errorbar(np.array(x_values) , y_value_method, color=colors[index], # + shift * (index - len(labels) // 2)
+                     yerr=errors_method, ecolor=colors[index],
+                     linestyle=linestyles[index], linewidth=3, alpha=0.7, capsize=5, zorder=1)
         plt.xlabel(xlabel, fontsize=18)
         plt.ylabel(ylabel, fontsize=18)
         plt.legend(fontsize=14)

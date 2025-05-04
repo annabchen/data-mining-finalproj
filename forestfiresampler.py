@@ -103,7 +103,7 @@ class FFSampler(GraphSampler):
                 in_neighbors = [source for source, target in inN]
                 outN = list(self.graph.out_edges(current_node))
                 out_neighbors = [target for source, target in outN]
-                print(outN)
+                # print(outN)
                 # Add all neighbors of each node a queue
                 for neighbor in neighbors:
                     if new_graph.number_of_nodes() >= self.final_number_of_nodes:

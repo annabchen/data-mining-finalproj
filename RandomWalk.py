@@ -5,8 +5,6 @@ from graph_reader import read_graph
 
 
 class RandomWalk(GraphSampler):
-    ## should be treating as directed graph?
-
     def __init__(self, graph, flyback=0.9, final_number_of_nodes=100, final_number_of_edges=100,
                  final_number_of_wedges=100, isDirected=False):
         self.flyback = flyback
@@ -34,13 +32,13 @@ class RandomWalk(GraphSampler):
         maxsteps = self.graph.number_of_nodes() # arbitrary value, may want to increase
 
         # select nodes until reached desired size
-        while sample_nodes < self.final_number_of_nodes: 
+        while sample_nodes < self.final_number_of_nodes:
             # chance of flyback
             if random.random() > self.flyback:
                 curr = start
             else:
                 neighbors = list(self.graph.neighbors(curr))
-                if not neighbors or steps > maxsteps:
+                while not neighbors or steps > maxsteps:
                     # prevent getting stuck in traversal
                     steps = 0
                     curr = random.choice(nodes)
@@ -62,12 +60,12 @@ class RandomWalk(GraphSampler):
 
 
 if __name__ == '__main__':
-    orig_graph = read_graph("CA-GrQc.txt", n_skip_lines=4, directed_graph=False)
+    orig_graph = read_graph("as-caida20071105.txt", n_skip_lines=8, directed_graph=True)
 
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges ", orig_graph.number_of_edges())
 
-    graph_sample = RandomWalk(orig_graph, 0.95, final_number_of_nodes=5200)
+    graph_sample = RandomWalk(orig_graph, 0.8, final_number_of_nodes=26104)
     sample = graph_sample.random_sample()
     print()
 

@@ -1,7 +1,10 @@
+from multiprocessing import Pool, cpu_count
+
 import networkx as nx
 import numpy as np
 import graph_plotter
 from graph_reader import read_graph
+import graph_savor
 from randomedgesampler import RandomEdgeSampler
 import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
@@ -11,60 +14,61 @@ from wedge_sampling import WedgeSampler
 from RandomWalk import RandomWalk
 from RandomJump import RandomJump
 from forestfiresampler import FFSampler
+from scipy.stats import mannwhitneyu
+from scipy.stats import ttest_ind
 import time
 
 
-def diameter_analysis(orig_graph, sample_graph):
+def average_shortest_path_length_analysis(orig_graph, sample_graph):
     """COMPUTES THE DIAMETER FOR AN ORIGINAL AND A SAMPLE GRAPH"""
-    orig_graph_diameter = nx.diameter(orig_graph)
-    sample_graph_diameter = nx.diameter(sample_graph)
-    # print("Original Graph Diameter: ", orig_graph_diameter)
-    # print("Sample Graph Diameter: ", sample_graph_diameter)
-    return orig_graph_diameter, sample_graph_diameter
+    graph_avg_SP = nx.average_shortest_path_length(orig_graph)
+    return graph_avg_SP
 
 
 def clustering_analysis(orig_graph, sample_graph):
     """COMPUTES THE CLUSTERING COEFFICIENT FOR AN ORIGINAL AND A SAMPLE GRAPH"""
     orig_graph_clustering = nx.average_clustering(orig_graph)
-    sample_graph_clustering = nx.average_clustering(sample_graph)
     # print("Original Graph Clustering Coefficient: ", orig_graph_clustering)
     # print("Sample Graph Clustering Coefficient:: ", sample_graph_clustering)
-    return orig_graph_clustering, sample_graph_clustering
+    return orig_graph_clustering
 
 
 def graph_edit_distance_analysis(orig_graph, sample_graph):
     """COMPUTES THE GED for a graph"""
-    distance = nx.graph_edit_distance(orig_graph, sample_graph, timeout=60)
-    # print("Graph Edit Distance Analysis: ", distance)
-    return distance
+    distance_iter = nx.optimize_graph_edit_distance(orig_graph, sample_graph)
+    try:
+        distance = next(distance_iter)
+    except StopIteration:
+        distance = float('inf')  # or handle differently if no result
+
+    # Normalize by number of nodes
+    distance_avg = round(distance / orig_graph.number_of_nodes(), 2)
+    return distance_avg
 
 
 def get_total_nodes(orig_graph, sample_graph):
     """RETURNS THE TOTAL NUMBER OF NODES"""
-    return orig_graph.number_of_nodes(), sample_graph.number_of_nodes()
+    return orig_graph.number_of_nodes()
 
 
 def get_total_edges(orig_graph, sample_graph):
     """RETURN THE TOTAL NUMBER OF EDGES"""
-    return orig_graph.number_of_edges(), sample_graph.number_of_edges()
+    return orig_graph.number_of_edges()
 
 
 def avg_degree_analysis(orig_graph, sample_graph):
     """COMPUTES THE DEGREE OF A GRAPH (HOW MANY EDGES DOES EACH NODE HAVE?)"""
     orig_graph_degree = nx.degree(orig_graph)
-    sample_graph_degree = nx.degree(sample_graph)
     # print("Original Graph Degree: ", orig_graph_degree)
     # print("Sample Graph Degree: ", sample_graph_degree)
 
     # Computing Average Degree within the whole graph
     orig_graph_avg_deg = round(sum(
         dict(orig_graph.degree()).values()) / orig_graph.number_of_nodes(), 2)
-    sample_graph_avg_deg = round(sum(
-        dict(sample_graph.degree()).values()) / sample_graph.number_of_nodes(), 2)
 
     # print("Original Graph Average Degree: ", orig_graph_avg_deg)
     # print("Sample Graph Average Degree: ", sample_graph_avg_deg)
-    return orig_graph_avg_deg, sample_graph_avg_deg
+    return orig_graph_avg_deg
 
 
 def degree_centrality_analysis(orig_graph, sample_graph):
@@ -72,7 +76,6 @@ def degree_centrality_analysis(orig_graph, sample_graph):
 
     DEGREE CENTRALITY = DEGREE / #NODES """
     orig_graph_centrality = nx.degree_centrality(orig_graph)
-    sample_graph_centrality = nx.degree_centrality(sample_graph)
 
     # print("Original Graph Degree Centrality: ", orig_graph_centrality)
     # print("Sample Graph Degree Centrality: ", sample_graph_centrality)
@@ -80,10 +83,8 @@ def degree_centrality_analysis(orig_graph, sample_graph):
     # Computing Average Centrality within the whole graph
     orig_graph_avg_centrality = round(sum(
         orig_graph_centrality.values()) / orig_graph.number_of_nodes(), 2)
-    sample_graph_avg_centrality = round(sum(
-        sample_graph_centrality.values()) / sample_graph.number_of_nodes(), 2)
 
-    return orig_graph_avg_centrality, sample_graph_avg_centrality
+    return orig_graph_avg_centrality
 
 
 def in_degree_centrality_analysis(orig_graph, sample_graph):
@@ -93,12 +94,10 @@ def in_degree_centrality_analysis(orig_graph, sample_graph):
 
     if not orig_graph.is_directed():
         orig_graph = nx.to_directed(orig_graph)
-        sample_graph = nx.to_directed(sample_graph)
     orig_graph_in_degree_centrality = nx.in_degree_centrality(orig_graph)
-    sample_graph_in_degree_centrality = nx.in_degree_centrality(sample_graph)
     # print("Original Graph Degree Centrality: ", orig_graph_in_degree_centrality)
     # print("Sample Graph Degree Centrality: ", sample_graph_in_degree_centrality)
-    return orig_graph_in_degree_centrality, sample_graph_in_degree_centrality
+    return orig_graph_in_degree_centrality
 
 
 def out_degree_centrality_analysis(orig_graph, sample_graph):
@@ -108,12 +107,10 @@ def out_degree_centrality_analysis(orig_graph, sample_graph):
 
     if not orig_graph.is_directed():
         orig_graph = nx.to_directed(orig_graph)
-        sample_graph = nx.to_directed(sample_graph)
     orig_graph_out_degree_centrality = nx.out_degree_centrality(orig_graph)
-    sample_graph_out_degree_centrality = nx.out_degree_centrality(sample_graph)
     # print("Original Graph Degree Centrality: ", orig_graph_out_degree_centrality)
     # print("Sample Graph Degree Centrality: ", sample_graph_out_degree_centrality)
-    return orig_graph_out_degree_centrality, sample_graph_out_degree_centrality
+    return orig_graph_out_degree_centrality
 
 
 def draw_graph(graph, name, options=None):
@@ -129,21 +126,34 @@ def draw_graph(graph, name, options=None):
     plt.show()
 
 
-def k_components_analysis(orig_graph, sample_graph):
-    """CONDUCTS A K-COMPONENT ANALYSIS OF A GRAPH"""
-    orig_graph_k_comp = nx.k_components(orig_graph)
-    sample_graph_k_comp = nx.k_components(sample_graph)
-    # print("Original Graph K Components: ", orig_graph_k_comp)
-    # print("Sample Graph K Components: ", sample_graph_k_comp)
-    return orig_graph_k_comp, sample_graph_k_comp
-
-
 def ks_test(orig_graph, sample_graph):
     """Performs a KS test on two graph samples to determine whether there is a statistical difference between them"""
     coeff, p_value = ks_2samp(orig_graph, sample_graph)
     # print("Coefficient:", coeff)
     # print("P-value: ", p_value)  # If above 0.05, then similar!
-    return coeff, p_value
+    return p_value
+
+
+def mannwhitneyu_test(orig_graph, sample_graph):
+    """Performs a KS test on two graph samples to determine whether there is a statistical difference between them"""
+    # Extract degree sequences
+    degrees_orig_graph = [d for n, d in orig_graph.degree()]
+    degrees_sample_graph = [d for n, d in sample_graph.degree()]
+
+    # Run two-sample t-test (Welch's t-test is safer for unequal variances)
+    stat, p_value = mannwhitneyu(degrees_orig_graph, degrees_sample_graph, alternative='two-sided')
+    return p_value
+
+
+def t_test(orig_graph, sample_graph):
+    """Performs a KS test on two graph samples to determine whether there is a statistical difference between them"""
+    # Extract degree sequences
+    degrees_orig_graph = [d for n, d in orig_graph.degree()]
+    degrees_sample_graph = [d for n, d in sample_graph.degree()]
+
+    # Run two-sample t-test (Welch's t-test is safer for unequal variances)
+    stat, p_value = ttest_ind(degrees_orig_graph, degrees_sample_graph)
+    return p_value
 
 
 def density_analysis(orig_graph, sample_graph):
@@ -151,10 +161,9 @@ def density_analysis(orig_graph, sample_graph):
      0 -> VERY SPARSE GRAPH (FEW CONNECTIONS);
      1 -> VERY DENSE GRAPH (EVERY NODE CONNECTED)"""
     orig_graph_density = nx.density(orig_graph)
-    sample_graph_density = nx.density(sample_graph)
     # print("Original Graph Density: ", orig_graph_density)
     # print("Sample Graph Density: ", sample_graph_density)
-    return orig_graph_density, sample_graph_density
+    return orig_graph_density
 
 
 def assortativity_analysis(orig_graph, sample_graph):
@@ -165,10 +174,20 @@ def assortativity_analysis(orig_graph, sample_graph):
                   0 -> no correlation
                   1 -> high-degree nodes connected to high-degree only"""
     orig_graph_assortativity = nx.degree_pearson_correlation_coefficient(orig_graph)
-    sample_graph_assortativity = nx.degree_pearson_correlation_coefficient(sample_graph)
     # print("Original Graph Assortativity: ", orig_graph_assortativity)
     # print("Sample Graph Assortativity: ", sample_graph_assortativity)
-    return orig_graph_assortativity, sample_graph_assortativity
+    return orig_graph_assortativity
+
+
+def betweenness_centrality(orig_graph, sample_graph):
+    """Measures the betweenness centrality of two graphs"""
+    orig_graph_betweenness = nx.betweenness_centrality(orig_graph)
+
+    # Computing Average Centrality within the whole graph
+    orig_graph_avg_betweenness = round(sum(
+        orig_graph_betweenness.values()) / orig_graph.number_of_nodes(), 2)
+
+    return orig_graph_avg_betweenness
 
 
 def degree_distribution_analysis(graph):
@@ -231,6 +250,8 @@ def test():
     # print()
     # print("KS-Test")
     # ks_test(orig_graph, sample_graph)
+    print()
+    print(graph_edit_distance_analysis(orig_graph, sample_graph))
 
 
 def analyze_distribution(orig_graph, sampling_methods, metric_function, precomputed_graphs,
@@ -260,29 +281,52 @@ def analyze_distribution(orig_graph, sampling_methods, metric_function, precompu
         print("Analysis Time: ", round(end_time - start_time, 2), " seconds")
 
 
-def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_repetitions=10):
+def sample_one_graph(args):
+    """Helper for parallel sampling. Returns a sample graph as an output"""
+    orig_graph, sampling_method, sample_size, n_wedges = args
+    sample_graph = sampling_method(
+        orig_graph,
+        final_number_of_nodes=int(sample_size / 100 * orig_graph.number_of_nodes()),
+        final_number_of_edges=int(sample_size / 100 * orig_graph.number_of_edges()),
+        final_number_of_wedges=int(sample_size / 100 * n_wedges),
+        isDirected=orig_graph.is_directed()
+    )
+    if orig_graph.is_directed():
+        return nx.DiGraph(sample_graph.random_sample())
+    else:
+        return nx.Graph(sample_graph.random_sample())
+
+
+def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_repetitions=3):
     """Precomputes the defined graphs with the specified sample sizes which will later be used for characterization"""
     # Approx. number of wedges:
     # CA-GrQc: 52612; as-caida: 34617
-
     wedge_sampler = WedgeSampler(orig_graph, 1, 1)
-    n_wedges = wedge_sampler.count_total_wedges()  # Calculating the total number of wedges
+    n_wedges = wedge_sampler.count_total_wedges()
 
+    sample_sizes = np.linspace(10, 90, n_sample_sizes)  # percentage of original size
+    jobs = []
+
+    for sample_size in sample_sizes:  # given in percent
+        for method in sampling_methods:
+            for _ in range(n_repetitions):
+                jobs.append((orig_graph, method, sample_size, n_wedges))
+
+    with Pool(cpu_count()) as pool:
+        results = pool.map(sample_one_graph, jobs)
+
+    # Rebuild nested list structure: [sample_size][method][repetition]
     graphs = []
-    sample_sizes = np.linspace(10, 100, n_sample_sizes)  # samples sizes are evenly distributed
+    index = 0
     for sample_size in sample_sizes:
-        interm_output = []
-        for sampling_method in sampling_methods:
-            prelim_output = []
-            for n_repetition in range(n_repetitions):
-                sample_graph = sampling_method(orig_graph,
-                                               final_number_of_nodes=int(sample_size / 100 * orig_graph.number_of_nodes()),
-                                               final_number_of_edges=int(sample_size / 100 * orig_graph.number_of_edges()),
-                                               final_number_of_wedges=int(sample_size / 100 * n_wedges),
-                                               isDirected=orig_graph.is_directed())
-                prelim_output.append(sample_graph.random_sample())
-            interm_output.append(prelim_output)
-        graphs.append(interm_output)
+        size_output = []
+        for method in sampling_methods:
+            method_output = []
+            for _ in range(n_repetitions):
+                method_output.append(results[index])
+                index += 1
+            size_output.append(method_output)
+        graphs.append(size_output)
     return graphs
 
 
@@ -315,7 +359,7 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
 
             # generate the specified metric outputs for a precomputed graph
             for k in range(n_repetitions):
-                interm_outputs.append(metric_function(orig_graph, precomputed_graphs[i][j][k])[1])
+                interm_outputs.append(metric_function(precomputed_graphs[i][j][k], orig_graph))
 
             mean = float(np.mean(interm_outputs))  # mean of a specific method for specific sample size
             std_error = float(2.262 * np.std(interm_outputs))  # ~95 % confidence for 9 degrees of freedom
@@ -323,8 +367,7 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
             y_values_error[sampling_method.get_method_name()].append(std_error)
 
         y_values_mean["Original Graph"].append(metric_function(orig_graph,
-                                                               orig_graph)[
-                                                   0])  # ORIGINAL SAMPLE; CHANGE INDEX TO ONE FOR KS-TEST
+                                                               orig_graph))  # ORIGINAL SAMPLE; CHANGE INDEX TO ONE FOR KS-TEST
 
         y_values_error["Original Graph"].append(0)  # no error in the original sample -> 0
         # blocks of sample means [10%], [20%], -> [[1,2,3], [2,3,4], ...]
@@ -345,43 +388,90 @@ if __name__ == '__main__':
     graph_info_as = ["as-caida20071105.txt", 8, True, "AS"]
     N = 2  # Number of graphs
     # SAMPLING METHODS USED
-    sampling_methods = [RandomEdgeSampler, RandomNodeSampler, RandomJump, SnowballSampler, WedgeSampler, FFSampler]
-    graph_infos = [graph_info_ca, graph_info_as]
+    sampling_methods = [SnowballSampler, WedgeSampler, FFSampler]  # SnowballSampler, WedgeSampler, FFSampler
+    graph_infos = [graph_info_as]
     for i in range(N):
         orig_graph = read_graph(graph_infos[i][0], n_skip_lines=graph_infos[i][1], directed_graph=graph_infos[i][2])
-        precomputed_graphs = compute_sampling_graphs(orig_graph, sampling_methods, 10)
+        loaded_graphs = graph_savor.load_graphs(graph_infos[i][3] + str(sampling_methods) + ".pkl")
+        precomputed_graphs = []
+        if loaded_graphs is not None:
+            precomputed_graphs = loaded_graphs
+        else:
+            precomputed_graphs = compute_sampling_graphs(orig_graph, sampling_methods, 10)
+            graph_savor.save_graphs(precomputed_graphs, graph_infos[i][3] + str(sampling_methods))
+
         # # Analyzing Average Degree for all Nodes
+        print("Analyzing Average Degree for all Nodes")
         analyze_mean(orig_graph, sampling_methods, avg_degree_analysis, precomputed_graphs, "Average Degree",
                      n_sample_sizes=10, n_repetitions=10, image_name="avg_degree" + graph_infos[i][3] + ".png")
-        # # # # Analyzing # of nodes
+        print()
+
+        # Analyzing # of nodes
+        print("Analyzing # of nodes")
         analyze_mean(orig_graph, sampling_methods, get_total_nodes, precomputed_graphs,y_label="Total Nodes",
                      n_sample_sizes=10, n_repetitions=10, image_name="total_nodes" + graph_infos[i][3] + ".png")
-        # # # Analyzing # of edges
+        print()
+
+        # Analyzing # of edges
+        print("Analyzing # of edges")
         analyze_mean(orig_graph, sampling_methods, get_total_edges, precomputed_graphs,y_label="Total Edges",
                      n_sample_sizes=10, n_repetitions=10, image_name="total_edges" + graph_infos[i][3] + ".png")
-        # # Analyzing Degree Centrality of nodes
+        print()
+
+        # Analyzing Degree Centrality of nodes
+        print("Analyzing Degree Centrality of nodes")
         analyze_mean(orig_graph, sampling_methods, degree_centrality_analysis, precomputed_graphs,
                      y_label="Degree Centrality",
                      n_sample_sizes=10, n_repetitions=10, image_name="degree_centrality" + graph_infos[i][3] + ".png",
                      scale='linear')
-        # # Analyzing Clustering Coefficient of a graph
+        print()
+
+        # Analyzing Clustering Coefficient of a graph
+        print("Analyzing Clustering Coefficient of a graph")
         analyze_mean(orig_graph, sampling_methods, clustering_analysis, precomputed_graphs,
                      y_label="Clustering Coefficient (Mean)",
                      n_sample_sizes=10, n_repetitions=10, image_name="clustering_coeff" + graph_infos[i][3] + ".png",
                      scale='linear')
-        # # # Analyzing KS-Coefficient
-        # analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="KS-Test Coefficient",
-        #              n_sample_sizes=10, n_repetitions=10, image_name="ks_test_coeff" + graph_infos[i][3] + ".png",
-        #              scale='linear')
+        print()
+
+        # Analyzing KS-Coefficient
+        print("Analyzing KS-Coefficient")
+        analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="P-value",
+                     n_sample_sizes=10, n_repetitions=10, image_name="ks_test_" + graph_infos[i][3] + ".png",
+                     scale='linear')
+        print()
+
+        # Mann - Whitney U-test
+        print("Mann-Whitney U-test")
+        analyze_mean(orig_graph, sampling_methods, mannwhitneyu_test, precomputed_graphs, y_label="P-value",
+                     n_sample_sizes=10, n_repetitions=10, image_name="mann_whitney_u_test_" + graph_infos[i][3] + ".png",
+                     scale='linear')
+        print()
+
+        # T-test
+        print("T-test")
+        analyze_mean(orig_graph, sampling_methods, t_test, precomputed_graphs, y_label="P-value",
+                     n_sample_sizes=10, n_repetitions=10, image_name="t_test_" + graph_infos[i][3] + ".png",
+                     scale='linear')
+        print()
+
         # # Analyzing Graph Density
+        print("Analyzing Graph Density")
         analyze_mean(orig_graph, sampling_methods, density_analysis, precomputed_graphs, y_label="Density",
                      n_sample_sizes=10, n_repetitions=10, image_name="density" + graph_infos[i][3] + ".png",
                      scale='log')
-        # # Analyzing Graph Assortativity
+        print()
+
+        # Analyzing Graph Assortativity
+        print("Analyzing Graph Assortativity")
         analyze_mean(orig_graph, sampling_methods, assortativity_analysis, precomputed_graphs,
                      y_label="Assortativity Coeff",
                      n_sample_sizes=10, n_repetitions=10, image_name="assortativity" + graph_infos[i][3] + ".png",
                      scale='linear')
+        print()
+
         # Analyzing Graph Degree Distribution
+        print("Analyzing Graph Degree Distribution")
         analyze_distribution(orig_graph, sampling_methods, degree_distribution_analysis, precomputed_graphs,
                              n_sample_sizes=3, n_repetitions=10, image_name="Degree Distribition" + graph_infos[i][3])
+        print()
