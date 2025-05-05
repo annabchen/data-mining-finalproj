@@ -63,8 +63,10 @@ def avg_degree_analysis(orig_graph, sample_graph):
     # print("Sample Graph Degree: ", sample_graph_degree)
 
     # Computing Average Degree within the whole graph
-    orig_graph_avg_deg = round(sum(
-        dict(orig_graph.degree()).values()) / orig_graph.number_of_nodes(), 2)
+    orig_graph_avg_deg = 0
+    if orig_graph.number_of_nodes() != 0:
+        orig_graph_avg_deg = round(sum(
+            dict(orig_graph.degree()).values()) / orig_graph.number_of_nodes(), 2)
 
     # print("Original Graph Average Degree: ", orig_graph_avg_deg)
     # print("Sample Graph Average Degree: ", sample_graph_avg_deg)
@@ -259,46 +261,51 @@ def analyze_distribution(orig_graph, sampling_methods, metric_function, precompu
     """ANALYZES THE DEFINED METRIC FUNCTION USING A SPECIFIED SAMPLING METHOD"""
     start_time = time.time()
     sample_sizes = np.linspace(10, 90, n_sample_sizes)  # samples sizes are evenly distributed
-    for i, sampling_method in enumerate(sampling_methods):
-        outputs = list()
-        labels = list()
-        labels.append("Original Graph")
-        outputs.append(metric_function(orig_graph))
-        for j, sample_size in enumerate(sample_sizes):
-            labels.append(f"Sample Graph: {sample_size} %")
-            interm_outputs = []
-            for k in range(n_repetitions):
-                interm_outputs.append(metric_function(precomputed_graphs[j][i][k]))
+    probabilities = np.linspace(10, 100, 10) # values for probIn
 
-            # return an average degree distribution
-            max_len = max(len(arr) for arr in interm_outputs)
-            padded = np.array([np.pad(arr, (0, max_len - len(arr)), constant_values=np.nan)
-                               for arr in interm_outputs])
-            outputs.append(np.mean(padded, axis=0))
-        graph_plotter.bar_plot(outputs, labels=labels, ylabel="Degree Distribution",
-                               image_name=image_name + "_" + sampling_method.get_method_name(), n_bins=30)
-        end_time = time.time()
-        print("Analysis Time: ", round(end_time - start_time, 2), " seconds")
+    for l, prob in probabilities:
+        for i, sampling_method in enumerate(sampling_methods):
+            outputs = list()
+            labels = list()
+            labels.append("Original Graph")
+            outputs.append(metric_function(orig_graph))
+            for j, sample_size in enumerate(sample_sizes):
+                labels.append(f"Sample Graph: {sample_size} %")
+                interm_outputs = []
+                for k in range(n_repetitions):
+                    interm_outputs.append(metric_function(precomputed_graphs[l][j][i][k]))
+
+                # return an average degree distribution
+                max_len = max(len(arr) for arr in interm_outputs)
+                padded = np.array([np.pad(arr, (0, max_len - len(arr)), constant_values=np.nan)
+                                   for arr in interm_outputs])
+                outputs.append(np.mean(padded, axis=0))
+            graph_plotter.bar_plot(outputs, labels=labels, ylabel="Degree Distribution",
+                                   image_name=image_name + "_" + sampling_method.get_method_name(), n_bins=30)
+            end_time = time.time()
+            print("Analysis Time: ", round(end_time - start_time, 2), " seconds")
 
 
 def sample_one_graph(args):
     """Helper for parallel sampling. Returns a sample graph as an output"""
     orig_graph, sampling_method, sample_size, n_wedges, probability = args
+    print(probability)
     sample_graph = sampling_method(
         orig_graph,
         final_number_of_nodes=int(sample_size / 100 * orig_graph.number_of_nodes()),
         final_number_of_edges=int(sample_size / 100 * orig_graph.number_of_edges()),
         final_number_of_wedges=int(sample_size / 100 * n_wedges),
-        probIn=probability,
+        probIn=probability / 100,
         isDirected=orig_graph.is_directed()
     )
     if orig_graph.is_directed():
         return nx.DiGraph(sample_graph.random_sample())
     else:
+        print(sample_graph.random_sample())
         return nx.Graph(sample_graph.random_sample())
 
 
-def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_repetitions=3):
+def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_repetitions=10):
     """Precomputes the defined graphs with the specified sample sizes which will later be used for characterization"""
     # Approx. number of wedges:
     # CA-GrQc: 52612; as-caida: 34617
@@ -306,7 +313,7 @@ def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_r
     n_wedges = wedge_sampler.count_total_wedges()
 
     sample_sizes = np.linspace(10, 90, n_sample_sizes)  # percentage of original size
-    probabilities = np.linspace(10, 100, 10) # values for probIn
+    probabilities = np.linspace(10, 90, n_sample_sizes) # values for probIn
     jobs = []
 
     for probability in probabilities:
@@ -321,15 +328,18 @@ def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_r
     # Rebuild nested list structure: [sample_size][method][repetition]
     graphs = []
     index = 0
-    for sample_size in sample_sizes:
-        size_output = []
-        for method in sampling_methods:
-            method_output = []
-            for _ in range(n_repetitions):
-                method_output.append(results[index])
-                index += 1
-            size_output.append(method_output)
-        graphs.append(size_output)
+    for probability in probabilities:
+        prob_output = []
+        for sample_size in sample_sizes:
+            size_output = []
+            for method in sampling_methods:
+                method_output = []
+                for _ in range(n_repetitions):
+                    method_output.append(results[index])
+                    index += 1
+                size_output.append(method_output)
+            prob_output.append(size_output)
+        graphs.append(prob_output)
     return graphs
 
 
@@ -339,6 +349,8 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
     E.G. MEAN DEGREE"""
     start_time = time.time()
     sample_sizes = np.linspace(10, 100, n_sample_sizes)  # samples sizes are evenly distributed
+    probabilities = np.linspace(10, 90, 10) # values for probIn
+
     y_values_mean = dict()  # orig_graph, sample_size_1, sample_size_2, ..., sample_size_n
     y_values_error = dict()  # orig_graph, sample_size_1, sample_size_2, ..., sample_size_n
     method_names = set()
@@ -356,26 +368,26 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
     method_names.add("Original Graph")
 
     # Iterate through all the sampling sizes, sampling methods, and the number of iterations
-    for i, sample_size in enumerate(sample_sizes):
-        for j, sampling_method in enumerate(sampling_methods):
-            interm_outputs = list()
+    for l, prob in enumerate(probabilities):
+        for i, sample_size in enumerate(sample_sizes):
+            for j, sampling_method in enumerate(sampling_methods):
+                # Somewhere here
+                interm_outputs = list()
+                # generate the specified metric outputs for a precomputed graph
+                for k in range(n_repetitions):
+                    interm_outputs.append(metric_function(precomputed_graphs[l][i][j][k], orig_graph))
 
-            # generate the specified metric outputs for a precomputed graph
-            for k in range(n_repetitions):
-                interm_outputs.append(metric_function(precomputed_graphs[i][j][k], orig_graph))
+                mean = float(np.mean(interm_outputs))  # mean of a specific method for specific sample size
+                std_error = float(2.262 * np.std(interm_outputs))  # ~95 % confidence for 9 degrees of freedom
+                y_values_mean[sampling_method.get_method_name()].append(mean)
+                y_values_error[sampling_method.get_method_name()].append(std_error)
 
-            mean = float(np.mean(interm_outputs))  # mean of a specific method for specific sample size
-            std_error = float(2.262 * np.std(interm_outputs))  # ~95 % confidence for 9 degrees of freedom
-            y_values_mean[sampling_method.get_method_name()].append(mean)
-            y_values_error[sampling_method.get_method_name()].append(std_error)
+            y_values_mean["Original Graph"].append(metric_function(orig_graph,
+                                                                   orig_graph))  # ORIGINAL SAMPLE; CHANGE INDEX TO ONE FOR KS-TEST
 
-        y_values_mean["Original Graph"].append(metric_function(orig_graph,
-                                                               orig_graph))  # ORIGINAL SAMPLE; CHANGE INDEX TO ONE FOR KS-TEST
-
-        y_values_error["Original Graph"].append(0)  # no error in the original sample -> 0
-        # blocks of sample means [10%], [20%], -> [[1,2,3], [2,3,4], ...]
-        # for different sample sizes
-
+            y_values_error["Original Graph"].append(0)  # no error in the original sample -> 0
+            # blocks of sample means [10%], [20%], -> [[1,2,3], [2,3,4], ...]
+            # for different sample sizes
     x_values = sample_sizes
     graph_plotter.plot_linear_with_scatter(x_values, y_values_mean, y_values_error,
                                            labels=list(method_names), ylabel=y_label, file_name=image_name,
@@ -399,6 +411,7 @@ if __name__ == '__main__':
         precomputed_graphs = []
         if loaded_graphs is not None:
             precomputed_graphs = loaded_graphs
+            print(precomputed_graphs[0][0][0][0])
         else:
             precomputed_graphs = compute_sampling_graphs(orig_graph, sampling_methods, 10)
             graph_savor.save_graphs(precomputed_graphs, graph_infos[i][3] + str(sampling_methods))

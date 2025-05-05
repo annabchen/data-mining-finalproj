@@ -16,110 +16,60 @@ class FFSampler(GraphSampler):
         self.probOut = probOut
 
     def random_sample(self):
-        if not self.isDirected:
-            # undirected version, selects from all connected nodes with even probability
-            new_graph = nx.Graph()
-            # Start from a random seed node
-            nodes = list(self.graph.nodes)
+        nodes = list(self.graph.nodes)
+        if not nodes:
+            return nx.Graph() if not self.isDirected else nx.DiGraph()
 
-            seed_node = random.choice(nodes)
-            visited = set()  # Stores the visited nodes
-            queue = deque([seed_node])  # Stores the next nodes to be visited
+        new_graph = nx.Graph() if not self.isDirected else nx.DiGraph()
+        visited = set()
+        seed_node = random.choice(nodes)
+        queue = deque([seed_node])
 
-            # loop while sampled size is smaller than final desired values
-            while new_graph.number_of_nodes() < self.final_number_of_nodes:
-                current_node = seed_node
-                if len(queue) != 0:
-                    # If there are no more nodes to visit,
-                    # but the while condition is still true,
-                    # then select a new seed node
-                    current_node = queue.popleft()
-                else:
-                    # randomly choose a new seed node
-                    seed_node = random.choice(nodes)
-                    # if selected seed node has been visited, continue thru the loop
-                    if seed_node in visited:
-                        allNodes = set(self.graph.nodes)
-                        unvisited = allNodes.difference(visited)
-                        unvisitedList = list(unvisited)
-                        # is no unvisited nodes, return
-                        if len(unvisitedList) == 0:
-                            return new_graph
+        while new_graph.number_of_nodes() < self.final_number_of_nodes:
+            if not queue:
+                unvisited = set(nodes) - visited
+                if not unvisited:
+                    break  # No more nodes to explore
+                seed_node = random.choice(list(unvisited))
+                queue.append(seed_node)
 
-                        seed_node = random.choice(unvisitedList)
-                    # add selected seed node to queue of nodes to process
-                    queue = deque([seed_node])
+            current_node = queue.popleft()
+            if current_node in visited:
+                continue
 
-                # after this loop, current node will have been visited
-                visited.add(current_node)
-                # find connected nodes
+            visited.add(current_node)
+
+            if self.isDirected:
+                neighbors = list(set(
+                    [t for _, t in self.graph.out_edges(current_node)] +
+                    [s for s, _ in self.graph.in_edges(current_node)]
+                ))
+            else:
                 neighbors = list(self.graph.neighbors(current_node))
-                random.shuffle(neighbors)  # Shuffle neighbors to avoid bias
 
-                # Add all neighbors of each node a queue
-                for neighbor in neighbors:
-                    if new_graph.number_of_nodes() >= self.final_number_of_nodes:
-                        # leave loop if at capacity for # of nodes
-                        break
-                    # if random num is over threshold, add that neighbor to new_graph, can only use nodes which ahvent been visited
-                    if random.random() >= self.probIn and neighbor not in visited:
-                        new_graph.add_edge(current_node, neighbor)
-                        # add neighbor to visited
-                        queue.append(neighbor)
+            random.shuffle(neighbors)
 
-        else:
-            # directed version- select in-links with probability r (backward burnign ratio) times less than out-links (forward burning prob p)
-            new_graph = nx.DiGraph()
-            # Start from a random seed node
-            nodes = list(self.graph.nodes)
+            for neighbor in neighbors:
+                if new_graph.number_of_nodes() >= self.final_number_of_nodes:
+                    break
+                if neighbor in visited:
+                    continue
 
-            seed_node = random.choice(nodes)
-            visited = set()  # Stores the visited nodes
-            queue = deque([seed_node])  # Stores the next nodes to be visited
+                prob = random.random()
+                add_edge = False
 
-            # loop while sampled size is smaller than final desired values
-            while new_graph.number_of_nodes() < self.final_number_of_nodes:
-                current_node = seed_node
-                if len(queue) != 0:
-                    # If there are no more nodes to visit,
-                    # but the while condition is still true,
-                    # then select a new seed node
-                    current_node = queue.popleft()
+                if not self.isDirected:
+                    if prob >= self.probIn:
+                        add_edge = True
                 else:
-                    # randomly choose a new seed node
-                    seed_node = random.choice(nodes)
-                    # if selected seed node has been visited, continue thru the loop
-                    if seed_node in visited:
-                        continue
-                    # add selected seed node to queue of nodes to process
-                    queue = deque([seed_node])
-                # after this loop, current node will have been visited
-                visited.add(current_node)
-                # find connected nodes
-                neighbors = list(self.graph.neighbors(current_node))
-                random.shuffle(neighbors)  # Shuffle neighbors to avoid bias
-                # generate the in-edges and out-edges of the seed node
-                inN = list(self.graph.in_edges(current_node))
-                in_neighbors = [source for source, target in inN]
-                outN = list(self.graph.out_edges(current_node))
-                out_neighbors = [target for source, target in outN]
-                # print(outN)
-                # Add all neighbors of each node a queue
-                for neighbor in neighbors:
-                    if new_graph.number_of_nodes() >= self.final_number_of_nodes:
-                        # leave loop if at capacity for # of nodes
-                        break
-                    # if random num is over threshold, add that neighbor to new_graph, can only use nodes which ahvent been visited
-                    if neighbor not in visited:
-                        prob = random.random()
-                        if neighbor in out_neighbors and prob >= self.probOut:
-                            new_graph.add_edge(current_node, neighbor)
-                            # add neighbor to visited
-                            queue.append(neighbor)
-                        if neighbor in in_neighbors and prob >= self.probOut / self.probIn:
-                            new_graph.add_edge(current_node, neighbor)
-                            # add neighbor to visited
-                            queue.append(neighbor)
+                    if self.graph.has_edge(current_node, neighbor) and prob >= self.probOut:
+                        add_edge = True
+                    elif self.graph.has_edge(neighbor, current_node) and prob >= self.probOut / self.probIn:
+                        add_edge = True
+
+                if add_edge:
+                    new_graph.add_edge(current_node, neighbor)
+                    queue.append(neighbor)
 
         return new_graph
 
@@ -135,7 +85,7 @@ if __name__ == '__main__':
     print("Original # Nodes:", orig_graph.number_of_nodes())
     print("Original # Edges:", orig_graph.number_of_edges())
 
-    graph_sample = FFSampler(orig_graph,  final_number_of_nodes=2000, final_number_of_edges=2000)
+    graph_sample = FFSampler(orig_graph,  final_number_of_nodes=2.7*2600, final_number_of_edges=2.7*4918, probIn=.2)
 
     sample = graph_sample.random_sample()
 
