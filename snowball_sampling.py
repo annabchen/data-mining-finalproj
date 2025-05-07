@@ -26,10 +26,9 @@ class SnowballSampler(GraphSampler):
 
         seed_node = random.choice(nodes)
         visited = set()  # Stores the visited nodes
-        queue = deque([seed_node]) # Stores the next nodes to be visited
+        queue = deque([seed_node])  # Stores the next nodes to be visited
 
-        while (new_graph.number_of_nodes() < self.final_number_of_nodes and
-               new_graph.number_of_edges() < self.final_number_of_edges):
+        while new_graph.number_of_nodes() < self.final_number_of_nodes:
             current_node = seed_node
             if len(queue) != 0:
                 # If there are no more nodes to visit,

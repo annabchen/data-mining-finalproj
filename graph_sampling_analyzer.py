@@ -190,6 +190,15 @@ def betweenness_centrality(orig_graph, sample_graph):
     return orig_graph_avg_betweenness
 
 
+def triangle_count(orig_graph, sample_graph=None):
+    """Returns the total number of triangles in the original graph"""
+    triangle_dict = nx.triangles(orig_graph)
+    total_triangles = sum(triangle_dict.values()) // 3
+    return total_triangles
+
+
+
+
 def degree_distribution_analysis(graph):
     """ANALYZING DEGREE DISTRIBUTION OF A GRAPH.
     RETURNS A BAR CHART"""
@@ -310,8 +319,9 @@ def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_r
     for sample_size in sample_sizes:  # given in percent
         for method in sampling_methods:
             for _ in range(n_repetitions):
-                jobs.append((orig_graph, method, sample_size, n_wedges))
-
+                jobs.append(sample_one_graph((orig_graph, method, sample_size, n_wedges)))
+                print("processed")
+    #
     with Pool(cpu_count()) as pool:
         results = pool.map(sample_one_graph, jobs)
 
@@ -330,12 +340,84 @@ def compute_sampling_graphs(orig_graph, sampling_methods, n_sample_sizes=10, n_r
     return graphs
 
 
+def analyze_quartiles(orig_graph, sampling_methods, metric_function, precomputed_graphs, y_label="Metric",
+                      n_sample_sizes=10, n_repetitions=10, image_name="Figure_Quartiles.png", scale='linear'):
+    """
+    Analyzes the defined metric function using specified sampling methods and returns the
+    median along with first and third quartiles (Q1, Q3). Generates a quartile plot.
+    """
+    import numpy as np
+    import time
+
+    start_time = time.time()
+    sample_sizes = np.linspace(10, 90, n_sample_sizes)
+
+    # Store medians and quartiles
+    y_values_median = dict()
+    y_values_q1 = dict()
+    y_values_q3 = dict()
+
+    method_names = set()
+
+    # Initialize storage for each method
+    for method in sampling_methods:
+        name = method.get_method_name()
+        method_names.add(name)
+        y_values_median[name] = []
+        y_values_q1[name] = []
+        y_values_q3[name] = []
+
+    # Original Graph (for reference)
+    y_values_median["Original Graph"] = []
+    y_values_q1["Original Graph"] = []
+    y_values_q3["Original Graph"] = []
+    method_names.add("Original Graph")
+
+    for i, sample_size in enumerate(sample_sizes):
+        for j, method in enumerate(sampling_methods):
+            results = [metric_function(precomputed_graphs[i][j][k], orig_graph) for k in range(n_repetitions)]
+            name = method.get_method_name()
+
+            y_values_median[name].append(np.median(results))
+            y_values_q1[name].append(np.percentile(results, 25))
+            y_values_q3[name].append(np.percentile(results, 75))
+
+        # Original Graph metric (no variation)
+        orig_value = metric_function(orig_graph, orig_graph)
+        y_values_median["Original Graph"].append(orig_value)
+        y_values_q1["Original Graph"].append(orig_value)
+        y_values_q3["Original Graph"].append(orig_value)
+
+    # Package lower and upper bounds for plotting
+    quartile_bounds = {
+        'lower': y_values_q1,
+        'upper': y_values_q3
+    }
+
+    x_values = sample_sizes
+
+    # Plot
+    graph_plotter.plot_linear_with_quartiles(
+        x_values,
+        y_values_median,
+        quartile_bounds,
+        ylabel=y_label,
+        file_name=image_name,
+        scale=scale
+    )
+
+    end_time = time.time()
+    print("Analysis Time: ", round(end_time - start_time, 2), " seconds")
+
+
+
+
 def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_graphs,  y_label="Metric",
                  n_sample_sizes=10, n_repetitions=10, image_name="Figure.png", scale='linear'):
     """ANALYZES THE DEFINED METRIC FUNCTION USING A SPECIFIED SAMPLING METHOD. RETURNS A MEAN OUTPUT.
     E.G. MEAN DEGREE"""
     start_time = time.time()
-    sample_sizes = np.linspace(10, 100, n_sample_sizes)  # samples sizes are evenly distributed
+    sample_sizes = np.linspace(10, 90, n_sample_sizes)  # samples sizes are evenly distributed
     y_values_mean = dict()  # orig_graph, sample_size_1, sample_size_2, ..., sample_size_n
     y_values_error = dict()  # orig_graph, sample_size_1, sample_size_2, ..., sample_size_n
     method_names = set()
@@ -375,10 +457,12 @@ def analyze_mean(orig_graph, sampling_methods, metric_function, precomputed_grap
 
     x_values = sample_sizes
     graph_plotter.plot_linear_with_scatter(x_values, y_values_mean, y_values_error,
-                                           labels=list(method_names), ylabel=y_label, file_name=image_name,
+                                           ylabel=y_label, file_name=image_name,
                                            scale=scale)
     end_time = time.time()
     print("Analysis Time: ", round(end_time - start_time, 2), " seconds")
+
+
 
 
 if __name__ == '__main__':
@@ -388,10 +472,12 @@ if __name__ == '__main__':
     graph_info_as = ["as-caida20071105.txt", 8, True, "AS"]
     N = 2  # Number of graphs
     # SAMPLING METHODS USED
-    sampling_methods = [SnowballSampler, WedgeSampler, FFSampler]  # SnowballSampler, WedgeSampler, FFSampler
-    graph_infos = [graph_info_as]
+    sampling_methods = [SnowballSampler, WedgeSampler, FFSampler]  # RandomNodeSampler, RandomEdgeSampler, RandomJump, RandomWalk, SnowballSampler, WedgeSampler, FFSampler
+    graph_infos = [graph_info_ca, graph_info_as]
+
     for i in range(N):
         orig_graph = read_graph(graph_infos[i][0], n_skip_lines=graph_infos[i][1], directed_graph=graph_infos[i][2])
+        print(graph_infos[i][3] + str(sampling_methods) + ".pkl")
         loaded_graphs = graph_savor.load_graphs(graph_infos[i][3] + str(sampling_methods) + ".pkl")
         precomputed_graphs = []
         if loaded_graphs is not None:
@@ -400,78 +486,111 @@ if __name__ == '__main__':
             precomputed_graphs = compute_sampling_graphs(orig_graph, sampling_methods, 10)
             graph_savor.save_graphs(precomputed_graphs, graph_infos[i][3] + str(sampling_methods))
 
-        # # Analyzing Average Degree for all Nodes
-        print("Analyzing Average Degree for all Nodes")
-        analyze_mean(orig_graph, sampling_methods, avg_degree_analysis, precomputed_graphs, "Average Degree",
-                     n_sample_sizes=10, n_repetitions=10, image_name="avg_degree" + graph_infos[i][3] + ".png")
-        print()
-
-        # Analyzing # of nodes
+        # # # Analyzing Average Degree for all Nodes
+        # print("Analyzing Average Degree for all Nodes")
+        # # analyze_mean(orig_graph, sampling_methods, avg_degree_analysis, precomputed_graphs, "Average Degree",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="avg_degree" + graph_infos[i][3] + ".png")
+        # analyze_quartiles(orig_graph, sampling_methods, avg_degree_analysis, precomputed_graphs, "Average Degree",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="avg_degree_quartiles_" + graph_infos[i][3] + ".png")
+        # print()
+        #
+        # # Analyzing # of nodes
         print("Analyzing # of nodes")
         analyze_mean(orig_graph, sampling_methods, get_total_nodes, precomputed_graphs,y_label="Total Nodes",
                      n_sample_sizes=10, n_repetitions=10, image_name="total_nodes" + graph_infos[i][3] + ".png")
-        print()
+        # analyze_quartiles(orig_graph, sampling_methods, get_total_nodes, precomputed_graphs, y_label="Total Nodes",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="total_nodes_quartiles" + graph_infos[i][3] + ".png")
+        # print()
+        #
+        # # Analyzing # of edges
+        # print("Analyzing # of edges")
+        # # analyze_mean(orig_graph, sampling_methods, get_total_edges, precomputed_graphs,y_label="Total Edges",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="total_edges" + graph_infos[i][3] + ".png")
+        # analyze_quartiles(orig_graph, sampling_methods, get_total_edges, precomputed_graphs, y_label="Total Edges",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="total_edges_quartiles" + graph_infos[i][3] + ".png")
+        # print()
+        #
+        # # Analyzing Degree Centrality of nodes
+        # print("Analyzing Degree Centrality of nodes")
+        # # analyze_mean(orig_graph, sampling_methods, degree_centrality_analysis, precomputed_graphs,
+        # #              y_label="Degree Centrality",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="degree_centrality" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, degree_centrality_analysis, precomputed_graphs,
+        #              y_label="Degree Centrality",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="degree_centrality_quartiles" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
+        #
+        # # Analyzing Clustering Coefficient of a graph
+        # print("Analyzing Clustering Coefficient of a graph")
+        # # analyze_mean(orig_graph, sampling_methods, clustering_analysis, precomputed_graphs,
+        # #              y_label="Clustering Coefficient (Mean)",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="clustering_coeff" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, clustering_analysis, precomputed_graphs,
+        #              y_label="Clustering Coefficient (Mean)",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="clustering_coeff_quartiles" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
+        #
+        # # Analyzing KS-Coefficient
+        # print("Analyzing KS-Coefficient")
+        # # analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="P-value",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="ks_test_" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="P-value",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="ks_test_quartiles_" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
+        #
+        # # Mann - Whitney U-test
+        # print("Mann-Whitney U-test")
+        # # analyze_mean(orig_graph, sampling_methods, mannwhitneyu_test, precomputed_graphs, y_label="P-value",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="mann_whitney_u_test_" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, mannwhitneyu_test, precomputed_graphs, y_label="P-value",
+        #              n_sample_sizes=10, n_repetitions=10,
+        #              image_name="mann_whitney_u_test_quartiles_" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
+        #
+        # # T-test
+        # print("T-test")
+        # # analyze_mean(orig_graph, sampling_methods, t_test, precomputed_graphs, y_label="P-value",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="t_test_" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, t_test, precomputed_graphs, y_label="P-value",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="t_test_quartiles_" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
+        #
+        # # # Analyzing Graph Density
+        # print("Analyzing Graph Density")
+        # # analyze_mean(orig_graph, sampling_methods, density_analysis, precomputed_graphs, y_label="Density",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="density" + graph_infos[i][3] + ".png",
+        # #              scale='log')
+        # analyze_quartiles(orig_graph, sampling_methods, density_analysis, precomputed_graphs, y_label="Density",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="density_quartiles_" + graph_infos[i][3] + ".png",
+        #              scale='log')
+        # print()
+        #
+        # # Analyzing Graph Assortativity
+        # print("Analyzing Graph Assortativity")
+        # # analyze_mean(orig_graph, sampling_methods, assortativity_analysis, precomputed_graphs,
+        # #              y_label="Assortativity Coeff",
+        # #              n_sample_sizes=10, n_repetitions=10, image_name="assortativity" + graph_infos[i][3] + ".png",
+        # #              scale='linear')
+        # analyze_quartiles(orig_graph, sampling_methods, assortativity_analysis, precomputed_graphs,
+        #              y_label="Assortativity Coeff",
+        #              n_sample_sizes=10, n_repetitions=10, image_name="assortativity_quartiles" + graph_infos[i][3] + ".png",
+        #              scale='linear')
+        # print()
 
-        # Analyzing # of edges
-        print("Analyzing # of edges")
-        analyze_mean(orig_graph, sampling_methods, get_total_edges, precomputed_graphs,y_label="Total Edges",
-                     n_sample_sizes=10, n_repetitions=10, image_name="total_edges" + graph_infos[i][3] + ".png")
-        print()
 
-        # Analyzing Degree Centrality of nodes
-        print("Analyzing Degree Centrality of nodes")
-        analyze_mean(orig_graph, sampling_methods, degree_centrality_analysis, precomputed_graphs,
-                     y_label="Degree Centrality",
-                     n_sample_sizes=10, n_repetitions=10, image_name="degree_centrality" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
-        # Analyzing Clustering Coefficient of a graph
-        print("Analyzing Clustering Coefficient of a graph")
-        analyze_mean(orig_graph, sampling_methods, clustering_analysis, precomputed_graphs,
-                     y_label="Clustering Coefficient (Mean)",
-                     n_sample_sizes=10, n_repetitions=10, image_name="clustering_coeff" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
-        # Analyzing KS-Coefficient
-        print("Analyzing KS-Coefficient")
-        analyze_mean(orig_graph, sampling_methods, ks_test, precomputed_graphs, y_label="P-value",
-                     n_sample_sizes=10, n_repetitions=10, image_name="ks_test_" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
-        # Mann - Whitney U-test
-        print("Mann-Whitney U-test")
-        analyze_mean(orig_graph, sampling_methods, mannwhitneyu_test, precomputed_graphs, y_label="P-value",
-                     n_sample_sizes=10, n_repetitions=10, image_name="mann_whitney_u_test_" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
-        # T-test
-        print("T-test")
-        analyze_mean(orig_graph, sampling_methods, t_test, precomputed_graphs, y_label="P-value",
-                     n_sample_sizes=10, n_repetitions=10, image_name="t_test_" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
-        # # Analyzing Graph Density
-        print("Analyzing Graph Density")
-        analyze_mean(orig_graph, sampling_methods, density_analysis, precomputed_graphs, y_label="Density",
-                     n_sample_sizes=10, n_repetitions=10, image_name="density" + graph_infos[i][3] + ".png",
-                     scale='log')
-        print()
-
-        # Analyzing Graph Assortativity
-        print("Analyzing Graph Assortativity")
-        analyze_mean(orig_graph, sampling_methods, assortativity_analysis, precomputed_graphs,
-                     y_label="Assortativity Coeff",
-                     n_sample_sizes=10, n_repetitions=10, image_name="assortativity" + graph_infos[i][3] + ".png",
-                     scale='linear')
-        print()
-
+        #
         # Analyzing Graph Degree Distribution
-        print("Analyzing Graph Degree Distribution")
-        analyze_distribution(orig_graph, sampling_methods, degree_distribution_analysis, precomputed_graphs,
-                             n_sample_sizes=3, n_repetitions=10, image_name="Degree Distribition" + graph_infos[i][3])
-        print()
+        # print("Analyzing Graph Degree Distribution")
+        # analyze_distribution(orig_graph, sampling_methods, degree_distribution_analysis, precomputed_graphs,
+        #                      n_sample_sizes=3, n_repetitions=10, image_name="Degree Distribition" + graph_infos[i][3])
+        # print()
