@@ -7,7 +7,7 @@
 - ### File Reading:
   **graph_reader.py**. Takes a graph as .txt file and provides a NetworkX graph object as an output.
 - ### File Saving:
-- **graph_savor.py**. Uses dill (pickle) libraries to save the iterations of graph samplings.
+- **graph_savor.py**. Uses dill (pickle) libraries to save the iterations of graph samples.
 - ### Data Plotting:
   **graph_plotter.py**. Takes the data from the main file and plots it as a line & scatter plot or a bar chart.
 - ### Abtract Graph Sampler class:
